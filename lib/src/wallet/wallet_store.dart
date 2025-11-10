@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -38,6 +39,15 @@ class WalletStore extends ChangeNotifier {
   DateTime? lastOverviewRefresh;
   DateTime? lastTransactionsRefresh;
   DateTime? lastOutputsRefresh;
+  List<AtomicSwapModel> atomicSwaps = const [];
+  AtomicSwapModel? latestAtomicSwap;
+  bool loadingAtomicSwaps = false;
+  bool atomicSwapBusy = false;
+  String? atomicSwapMessage;
+  String? atomicSwapChecksum;
+  String atomicSwapDirectory = 'wallet_data/atomic_swap_txs';
+  String atomicSwapHost = '127.0.0.1';
+  String atomicSwapPort = '80';
 
   Future<void> bootstrap({required String defaultNode}) async {
     await _ensureNode(defaultNode);
@@ -280,10 +290,211 @@ class WalletStore extends ChangeNotifier {
     await refreshOutputs(refreshFromNode: true);
   }
 
+  Future<void> refreshAtomicSwaps() async {
+    if (!unlocked || loadingAtomicSwaps) return;
+    loadingAtomicSwaps = true;
+    notifyListeners();
+    try {
+      atomicSwaps = await _service.listAtomicSwaps();
+      atomicSwapMessage = null;
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      loadingAtomicSwaps = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> createAtomicSwap({
+    required String fromCurrency,
+    required String toCurrency,
+    required BigInt fromAmount,
+    required BigInt toAmount,
+    required BigInt timeoutMinutes,
+  }) async {
+    if (!unlocked || atomicSwapBusy) return;
+    atomicSwapBusy = true;
+    notifyListeners();
+    try {
+      latestAtomicSwap = await _service.createAtomicSwap(
+        fromCurrency: fromCurrency,
+        toCurrency: toCurrency,
+        fromAmount: fromAmount,
+        toAmount: toAmount,
+        timeoutMinutes: timeoutMinutes,
+      );
+      atomicSwapMessage = null;
+      await refreshAtomicSwaps();
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      atomicSwapBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> acceptAtomicSwap(int swapId) async {
+    if (!unlocked || atomicSwapBusy) return;
+    atomicSwapBusy = true;
+    notifyListeners();
+    try {
+      latestAtomicSwap = await _service.acceptAtomicSwap(swapId);
+      atomicSwapMessage = null;
+      await refreshAtomicSwaps();
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      atomicSwapBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> inspectAtomicSwap(int swapId) async {
+    if (!unlocked) return;
+    try {
+      latestAtomicSwap = await _service.inspectAtomicSwap(swapId);
+      atomicSwapMessage = null;
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  Future<String> fetchAtomicSwapPayload(int swapId) async {
+    // Always fetch the raw record so the payload contains the swap id and pub_slate.
+    return _service.atomicSwapRaw(swapId);
+  }
+
+  Future<void> importAtomicSwap(int swapId, String payload) async {
+    if (!unlocked || atomicSwapBusy) return;
+    atomicSwapBusy = true;
+    notifyListeners();
+    try {
+      await _service.atomicSwapImport(swapId, payload);
+      atomicSwapMessage = null;
+      await refreshAtomicSwaps();
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      atomicSwapBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> setAtomicSwapDirectory(String path) async {
+    try {
+      await _service.setAtomicSwapDirectory(path);
+      atomicSwapDirectory = path;
+      atomicSwapMessage = 'Using swap directory $path';
+      await refreshAtomicSwaps();
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  Future<void> setAtomicSwapPeer(String host, String port) async {
+    try {
+      await _service.atomicSwapSetPeer(host, port);
+      atomicSwapHost = host;
+      atomicSwapPort = port;
+      atomicSwapMessage = 'Using peer $host:$port';
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshAtomicSwapChecksum(int swapId) async {
+    if (!unlocked) return;
+    try {
+      atomicSwapChecksum = await _service.atomicSwapChecksum(swapId);
+      atomicSwapMessage = null;
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  Future<void> lockAtomicSwap(int swapId) async {
+    if (!unlocked || atomicSwapBusy) return;
+    atomicSwapBusy = true;
+    notifyListeners();
+    try {
+      await _service.atomicSwapLock(swapId);
+      atomicSwapMessage = 'Swap $swapId locked.';
+      await refreshAtomicSwaps();
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      atomicSwapBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> executeAtomicSwap(int swapId) async {
+    if (!unlocked || atomicSwapBusy) return;
+    atomicSwapBusy = true;
+    notifyListeners();
+    try {
+      await _service.atomicSwapExecute(swapId);
+      atomicSwapMessage = 'Swap $swapId executed.';
+      await refreshAtomicSwaps();
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      atomicSwapBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> cancelAtomicSwap(int swapId) async {
+    if (!unlocked || atomicSwapBusy) return;
+    atomicSwapBusy = true;
+    notifyListeners();
+    try {
+      await _service.atomicSwapCancel(swapId);
+      atomicSwapMessage = 'Swap $swapId cancelled.';
+      await refreshAtomicSwaps();
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      atomicSwapBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteAtomicSwap(int swapId) async {
+    if (!unlocked) return;
+    try {
+      final msg = await _service.atomicSwapDelete(swapId);
+      atomicSwapMessage = msg;
+      await refreshAtomicSwaps();
+    } catch (e) {
+      atomicSwapMessage = e.toString();
+    } finally {
+      notifyListeners();
+    }
+  }
+
   @override
   void dispose() {
     _autoRefresh?.cancel();
     super.dispose();
+  }
+
+  AtomicSwapModel? _findAtomicSwapById(int swapId) {
+    for (final swap in atomicSwaps) {
+      if (swap.id == swapId) return swap;
+    }
+    if (latestAtomicSwap?.id == swapId) {
+      return latestAtomicSwap;
+    }
+    return null;
   }
 
   Future<void> _ensureNode(String fallback) async {

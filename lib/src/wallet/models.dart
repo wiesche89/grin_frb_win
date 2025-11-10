@@ -298,3 +298,41 @@ class TorStatusModel {
   final String? onionAddress;
   final String? slatepackAddress;
 }
+
+class AtomicSwapModel {
+  AtomicSwapModel({
+    required this.id,
+    required this.status,
+    required this.btcAmount,
+    required this.grinAmount,
+    required this.meta,
+    required this.publicSlate,
+    this.checksum,
+  });
+
+  factory AtomicSwapModel.fromJson(Map<String, dynamic> json) {
+    final pubSlate = Map<String, dynamic>.from(json['pub_slate'] as Map? ?? {});
+    final btc = Map<String, dynamic>.from(pubSlate['btc'] as Map? ?? {});
+    final mw = Map<String, dynamic>.from(pubSlate['mw'] as Map? ?? {});
+    final meta = Map<String, dynamic>.from(pubSlate['meta'] as Map? ?? {});
+    return AtomicSwapModel(
+      id: (json['id'] is String ? int.parse(json['id'] as String) : (json['id'] as num)).toInt(),
+      status: pubSlate['status'] as String? ?? 'unknown',
+      btcAmount: _bigInt(btc['amount'] ?? 0),
+      grinAmount: _bigInt(mw['amount'] ?? 0),
+      meta: meta,
+      publicSlate: pubSlate,
+      checksum: json['checksum'] as String?,
+    );
+  }
+
+  final int id;
+  final String status;
+  final BigInt btcAmount;
+  final BigInt grinAmount;
+  final Map<String, dynamic> meta;
+  final Map<String, dynamic> publicSlate;
+  final String? checksum;
+
+  bool get initialized => status == 'INITIALIZED';
+}

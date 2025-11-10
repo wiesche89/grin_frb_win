@@ -122,4 +122,71 @@ class WalletService {
     final Map<String, dynamic> data = jsonDecode(raw) as Map<String, dynamic>;
     return OwnerListenerStatusModel.fromJson(data);
   }
+
+  Future<AtomicSwapModel> createAtomicSwap({
+    required String fromCurrency,
+    required String toCurrency,
+    required BigInt fromAmount,
+    required BigInt toAmount,
+    required BigInt timeoutMinutes,
+  }) async {
+    final raw = await bridge.atomicSwapInit(
+      fromCurrency: fromCurrency,
+      toCurrency: toCurrency,
+      fromAmount: fromAmount,
+      toAmount: toAmount,
+      timeoutMinutes: timeoutMinutes,
+    );
+    return _parseAtomicSwap(raw);
+  }
+
+  Future<AtomicSwapModel> acceptAtomicSwap(int swapId) async {
+    final raw = await bridge.atomicSwapAccept(swapId: BigInt.from(swapId));
+    return _parseAtomicSwap(raw);
+  }
+
+  Future<AtomicSwapModel> inspectAtomicSwap(int swapId) async {
+    final raw = await atomicSwapRaw(swapId);
+    return _parseAtomicSwap(raw);
+  }
+
+  Future<List<AtomicSwapModel>> listAtomicSwaps() async {
+    final raw = await bridge.atomicSwapList();
+    final data = jsonDecode(raw) as List<dynamic>;
+    return data
+        .map((item) => AtomicSwapModel.fromJson(Map<String, dynamic>.from(item as Map)))
+        .toList();
+  }
+
+  Future<String> atomicSwapChecksum(int swapId) =>
+      bridge.atomicSwapChecksum(swapId: BigInt.from(swapId));
+
+  Future<String> atomicSwapImport(int swapId, String payload) =>
+      bridge.atomicSwapImport(swapId: BigInt.from(swapId), payload: payload);
+
+  Future<String> atomicSwapLock(int swapId) =>
+      bridge.atomicSwapLock(swapId: BigInt.from(swapId));
+
+  Future<String> atomicSwapExecute(int swapId) =>
+      bridge.atomicSwapExecute(swapId: BigInt.from(swapId));
+
+  Future<String> atomicSwapCancel(int swapId) =>
+      bridge.atomicSwapCancel(swapId: BigInt.from(swapId));
+
+  Future<String> atomicSwapDelete(int swapId) =>
+      bridge.atomicSwapDelete(swapId: BigInt.from(swapId));
+
+  Future<String> atomicSwapSetPeer(String host, String port) =>
+      bridge.atomicSwapSetPeer(host: host, port: port);
+
+  Future<String> setAtomicSwapDirectory(String path) =>
+      bridge.atomicSwapSetDirectory(path: path);
+
+  Future<String> atomicSwapRaw(int swapId) =>
+      bridge.atomicSwapRead(swapId: BigInt.from(swapId));
+
+  AtomicSwapModel _parseAtomicSwap(String raw) {
+    final Map<String, dynamic> data = jsonDecode(raw) as Map<String, dynamic>;
+    return AtomicSwapModel.fromJson(data);
+  }
 }
