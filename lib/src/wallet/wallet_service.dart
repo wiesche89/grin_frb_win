@@ -95,4 +95,31 @@ class WalletService {
         .map((item) => mapper(Map<String, dynamic>.from(item as Map)))
         .toList();
   }
+
+  // --- Tor service ---
+  Future<TorStatusModel> torStatus() async {
+    final raw = await bridge.torStatus();
+    final Map<String, dynamic> data = jsonDecode(raw) as Map<String, dynamic>;
+    return TorStatusModel.fromJson(data);
+  }
+
+  Future<TorStatusModel> torStart({String listenAddr = '127.0.0.1:3415'}) async {
+    final raw = await bridge.torStart(listenAddr: listenAddr);
+    final Map<String, dynamic> data = jsonDecode(raw) as Map<String, dynamic>;
+    return TorStatusModel.fromJson(data);
+  }
+
+  Future<void> torStop() => bridge.torStop();
+
+  Future<OwnerListenerStatusModel> fetchOwnerListenerStatus() async {
+    final raw = await bridge.ownerListenerStatus();
+    final Map<String, dynamic> data = jsonDecode(raw) as Map<String, dynamic>;
+    return OwnerListenerStatusModel.fromJson(data);
+  }
+
+  Future<OwnerListenerStatusModel> startOwnerListener() async {
+    final raw = await bridge.ownerListenerStart();
+    final Map<String, dynamic> data = jsonDecode(raw) as Map<String, dynamic>;
+    return OwnerListenerStatusModel.fromJson(data);
+  }
 }

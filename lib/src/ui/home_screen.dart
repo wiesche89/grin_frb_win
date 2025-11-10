@@ -15,7 +15,7 @@ import '../wallet/wallet_store.dart';
 const _publicNode = 'https://grincoin.org';
 const _localNode = 'http://localhost:3413';
 
-enum WalletPanel { overview, transactions, outputs, slatepacks, accounts }
+enum WalletPanel { overview, transactions, outputs, slatepacks, accounts, tor, api }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -159,6 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _walletPass = passToUse;
       await walletStore.onWalletUnlocked();
       append('Wallet unlocked. Run a full sync when needed.');
+      await _checkForeignListener(dir);
     } catch (e) {
       append('Unlock failed: $e');
     }
@@ -702,31 +703,49 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  NavigationRail(
-                    selectedIndex: panel.index,
-                    onDestinationSelected: (idx) =>
-                        setState(() => panel = WalletPanel.values[idx]),
-                    labelType: NavigationRailLabelType.all,
-                    destinations: [
-                      _railDest(context.tr('Overview', 'Uebersicht'), Icons.dashboard),
-                      _railDest(context.tr('Transactions', 'Transaktionen'), Icons.swap_horiz),
-                      _railDest(context.tr('Outputs', 'Outputs'), Icons.storage),
-                      _railDest(context.tr('Slatepacks', 'Slatepacks'), Icons.all_inbox),
-                      _railDest(context.tr('Accounts', 'Accounts'), Icons.account_tree),
-                    ],
+                  Container(
+                    width: 92,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: NavigationRail(
+                      selectedIndex: panel.index,
+                      onDestinationSelected: (idx) =>
+                          setState(() => panel = WalletPanel.values[idx]),
+                      labelType: NavigationRailLabelType.all,
+                      destinations: [
+                        _railDest(context.tr('Overview', 'Uebersicht'), Icons.dashboard),
+                        _railDest(context.tr('Transactions', 'Transaktionen'), Icons.swap_horiz),
+                        _railDest(context.tr('Outputs', 'Outputs'), Icons.storage),
+                        _railDest(context.tr('Slatepacks', 'Slatepacks'), Icons.all_inbox),
+                        _railDest(context.tr('Accounts', 'Accounts'), Icons.account_tree),
+                        _railDest(context.tr('TOR', 'TOR'), Icons.security),
+                        _railDest(context.tr('API', 'API'), Icons.api),
+                      ],
+                    ),
                   ),
                   const VerticalDivider(width: 1),
                   Expanded(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: _buildPanel(store),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _buildPanel(store),
+                          ),
+                        ),
+                        Container(
+                          height: 200,
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: _buildLogPanel(),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
-            _buildLogPanel(),
           ],
         ),
       ),
@@ -879,10 +898,272 @@ class _HomeScreenState extends State<HomeScreen> {
         return _slatepackPanel();
       case WalletPanel.accounts:
         return _accountsPanel(store);
+      case WalletPanel.tor:
+        return _torPanel(store);
+      case WalletPanel.api:
+        return _apiPanel(store);
       case WalletPanel.overview:
       default:
         return _overviewPanel(store);
     }
+  }
+
+  Future<void> _checkForeignListener(String walletDir) async {
+    final store = _walletStore;
+    final secretPath = '$walletDir${Platform.pathSeparator}.foreign_api_secret';
+    final secretFile = File(secretPath);
+    if (!await secretFile.exists()) {
+      append('Foreign secret missing at $secretPath');
+      return;
+    }
+    try {
+      final secret = (await secretFile.readAsString()).trim();
+      if (secret.isEmpty) {
+        append('Foreign secret is empty, cannot ping listener.');
+        return;
+      }
+      final credentials = base64.encode(utf8.encode('grin:$secret'));
+      final client = HttpClient();
+      try {
+        final request = await client.postUrl(Uri.parse('http://127.0.0.1:3415/v2/foreign'));
+        request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
+        request.headers.set(HttpHeaders.authorizationHeader, 'Basic $credentials');
+        request.add(utf8.encode(jsonEncode({
+          'jsonrpc': '2.0',
+          'method': 'check_version',
+          'params': {},
+          'id': 1,
+        })));
+        final response = await request.close().timeout(const Duration(seconds: 4));
+        final body = await response.transform(utf8.decoder).join();
+        final message =
+            'Foreign listener ${response.statusCode}: ${body.isEmpty ? '<no data>' : body}';
+        store?.updateForeignApiState(
+          running: response.statusCode == 200,
+          message: message,
+        );
+        append(message);
+      } finally {
+        client.close(force: true);
+      }
+    } catch (e) {
+      final message = 'Foreign listener ping failed: $e';
+      store?.updateForeignApiState(running: false, message: message);
+      append(message);
+    }
+  }
+
+  Widget _torPanel(WalletStore store) {
+    final status = store.torStatus;
+    final running = status?.running ?? false;
+    final onion = status?.onionAddress ?? '—';
+    final slatepack = status?.slatepackAddress ?? store.walletAddress ?? '—';
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _overviewCard(
+            title: 'TOR',
+            subtitle: context.tr(
+              'Start the built-in Tor hidden service to receive via Slatepack.',
+              'Starte den integrierten Tor-Dienst, um per Slatepack zu empfangen.',
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Switch(
+                      value: running,
+                      onChanged: (v) async {
+                        append(v ? 'Starting Tor…' : 'Stopping Tor…');
+                        try {
+                          await store.setTorRunning(v);
+                          append(v ? 'Tor started.' : 'Tor stopped.');
+                        } catch (e) {
+                          append('Tor error: $e');
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: running ? Colors.green.withOpacity(0.15) : Colors.orange.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Text(
+                        running
+                            ? context.tr('Service is running', 'Dienst laeuft')
+                            : context.tr('Service is stopped', 'Dienst gestoppt'),
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: context.tr('Refresh', 'Aktualisieren'),
+                      icon: const Icon(Icons.refresh),
+                      onPressed: () async {
+                        await store.refreshTorStatus();
+                        append('Tor status refreshed.');
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text('Onion', style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: SelectableText(onion, style: const TextStyle(fontFamily: 'monospace')),
+                ),
+                const SizedBox(height: 16),
+                Text('Slatepack', style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: SelectableText(slatepack, style: const TextStyle(fontFamily: 'monospace')),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+  Widget _apiPanel(WalletStore store) {
+    final foreignMessage = store.foreignApiMessage ??
+        context.tr('Foreign API status not known yet', 'Foreign-API Status noch nicht bekannt');
+    final foreignRunning = store.foreignApiRunning;
+    final owner = store.ownerApiStatus;
+    final ownerRunning = owner?.running ?? false;
+    final ownerAddr = owner?.listenAddr ?? '127.0.0.1:3420';
+    final ownerStatusText = ownerRunning
+        ? context.tr('Owner API running', 'Owner-API laeuft')
+        : context.tr('Owner API stopped', 'Owner-API gestoppt');
+    final ownerButtonLabel = ownerRunning
+        ? context.tr('Restart Owner API', 'Owner-API neu starten')
+        : context.tr('Start Owner API', 'Owner-API starten');
+    final ownerStartingMessage =
+        context.tr('Starting Owner API…', 'Owner-API wird gestartet…');
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _overviewCard(
+            title: context.tr('Foreign API', 'Foreign-API'),
+            subtitle: context.tr(
+              'Shows whether the local Foreign listener accepts calls.',
+              'Zeigt, ob der lokale Foreign-Listener Anfragen entgegennimmt.',
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      foreignRunning ? Icons.check_circle : Icons.error_outline,
+                      color: foreignRunning ? Colors.greenAccent : Colors.orangeAccent,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        foreignRunning
+                            ? context.tr('Foreign API is responding', 'Foreign-API antwortet')
+                            : context.tr('Foreign API unreachable', 'Foreign-API nicht erreichbar'),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    FilledButton(
+                      onPressed: store.unlocked
+                          ? () async {
+                              final dir = Directory(dataDirCtrl.text.trim()).absolute.path;
+                              await _checkForeignListener(dir);
+                            }
+                          : null,
+                      child: Text(context.tr('Ping', 'Ping')),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(foreignMessage, style: const TextStyle(color: Colors.white70)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _overviewCard(
+            title: context.tr('Owner API', 'Owner-API'),
+            subtitle: context.tr(
+              'Start the secure Owner interface for wallet management.',
+              'Starte die sichere Owner-Schnittstelle fuer Wallet-Verwaltung.',
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      ownerRunning ? Icons.check_circle : Icons.power_settings_new,
+                      color: ownerRunning ? Colors.greenAccent : Colors.orangeAccent,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(ownerStatusText, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    IconButton(
+                  tooltip: context.tr('Refresh status', 'Status aktualisieren'),
+                  icon: const Icon(Icons.refresh),
+                  onPressed: store.unlocked ? () => store.refreshOwnerApiStatus() : null,
+                ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: SelectableText(ownerAddr, style: const TextStyle(fontFamily: 'monospace')),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  icon: const Icon(Icons.play_arrow),
+                  label: Text(ownerButtonLabel),
+                  onPressed: store.ownerApiStarting || ownerRunning
+                      ? null
+                      : () async {
+                          append(ownerStartingMessage);
+                          await store.startOwnerApi();
+                        },
+                ),
+                if (owner?.message != null) ...[
+                  const SizedBox(height: 8),
+                  Text(owner!.message!, style: const TextStyle(color: Colors.white70)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _overviewPanel(WalletStore store) {

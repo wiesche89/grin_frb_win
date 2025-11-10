@@ -21,6 +21,11 @@ class WalletStore extends ChangeNotifier {
   String? walletAddress;
   BigInt? tipHeight;
   String? lastError;
+  TorStatusModel? torStatus;
+  bool foreignApiRunning = false;
+  String? foreignApiMessage;
+  OwnerListenerStatusModel? ownerApiStatus;
+  bool ownerApiStarting = false;
   bool includeSpentOutputs = false;
   bool loadingOverview = false;
   bool loadingTransactions = false;
@@ -52,6 +57,8 @@ class WalletStore extends ChangeNotifier {
       refreshTransactions(refreshFromNode: true),
       refreshOutputs(refreshFromNode: true),
       refreshAccounts(),
+      refreshTorStatus(),
+      refreshOwnerApiStatus(),
     ]);
   }
 
@@ -73,6 +80,10 @@ class WalletStore extends ChangeNotifier {
       tipHeight = await _service.getNodeTip();
       walletAddress = await _service.fetchAddress();
       nodeUrl ??= await _service.getNodeUrl();
+      // also keep tor slatepack in sync if provided
+      try {
+        torStatus ??= await _service.torStatus();
+      } catch (_) {}
       lastError = null;
       lastOverviewRefresh = DateTime.now();
     } catch (e) {
@@ -98,6 +109,58 @@ class WalletStore extends ChangeNotifier {
       loadingTransactions = false;
       notifyListeners();
     }
+  }
+
+  Future<void> refreshTorStatus() async {
+    if (!unlocked) return;
+    try {
+      torStatus = await _service.torStatus();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> refreshOwnerApiStatus() async {
+    if (!unlocked) return;
+    try {
+      ownerApiStatus = await _service.fetchOwnerListenerStatus();
+      lastError = null;
+    } catch (e) {
+      lastError = e.toString();
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  Future<void> startOwnerApi() async {
+    if (!unlocked || ownerApiStarting) return;
+    ownerApiStarting = true;
+    notifyListeners();
+    try {
+      ownerApiStatus = await _service.startOwnerListener();
+      lastError = null;
+    } catch (e) {
+      lastError = e.toString();
+    } finally {
+      ownerApiStarting = false;
+      notifyListeners();
+    }
+  }
+
+  void updateForeignApiState({required bool running, required String message}) {
+    foreignApiRunning = running;
+    foreignApiMessage = message;
+    notifyListeners();
+  }
+
+  Future<void> setTorRunning(bool value) async {
+    if (!unlocked) return;
+    if (value) {
+      torStatus = await _service.torStart();
+    } else {
+      await _service.torStop();
+      torStatus = TorStatusModel(running: false, onionAddress: torStatus?.onionAddress, slatepackAddress: walletAddress);
+    }
+    notifyListeners();
   }
 
   Future<void> refreshOutputs({bool refreshFromNode = false}) async {

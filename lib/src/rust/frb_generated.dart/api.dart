@@ -117,3 +117,16 @@ Future<String> walletTransactionSlatepack({required int txId}) =>
 
 Future<String> walletVerifyPaymentProof({required String payload}) =>
     RustLib.instance.api.crateApiWalletVerifyPaymentProof(payload: payload);
+
+Future<String> torStatus() => RustLib.instance.api.crateApiTorStatus();
+
+Future<String> torStart({required String listenAddr}) =>
+    RustLib.instance.api.crateApiTorStart(listenAddr: listenAddr);
+
+Future<void> torStop() => RustLib.instance.api.crateApiTorStop();
+
+Future<String> ownerListenerStatus() =>
+    RustLib.instance.api.crateApiOwnerListenerStatus();
+
+Future<String> ownerListenerStart() =>
+    RustLib.instance.api.crateApiOwnerListenerStart();

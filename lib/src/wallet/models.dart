@@ -261,3 +261,40 @@ class PaymentProofVerification {
   final bool isSender;
   final bool isRecipient;
 }
+
+class OwnerListenerStatusModel {
+  OwnerListenerStatusModel({
+    required this.running,
+    required this.listenAddr,
+    this.message,
+  });
+
+  factory OwnerListenerStatusModel.fromJson(Map<String, dynamic> json) =>
+      OwnerListenerStatusModel(
+        running: json['running'] as bool? ?? false,
+        listenAddr: json['listenAddr'] as String? ?? '127.0.0.1:3420',
+        message: json['message'] as String?,
+      );
+
+  final bool running;
+  final String listenAddr;
+  final String? message;
+}
+
+class TorStatusModel {
+  TorStatusModel({
+    required this.running,
+    this.onionAddress,
+    this.slatepackAddress,
+  });
+
+  factory TorStatusModel.fromJson(Map<String, dynamic> json) => TorStatusModel(
+        running: json['running'] as bool? ?? false,
+        onionAddress: json['onionAddress'] as String?,
+        slatepackAddress: json['slatepackAddress'] as String?,
+      );
+
+  final bool running;
+  final String? onionAddress;
+  final String? slatepackAddress;
+}

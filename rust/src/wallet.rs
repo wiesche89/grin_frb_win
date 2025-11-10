@@ -1,31 +1,34 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Once};
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Context, Result};
+use chrono::Utc;
 use grin_core::global::{self, ChainTypes};
 use grin_keychain::ExtKeychain;
 use grin_util::secp::key::SecretKey;
 use grin_util::{Mutex as GrinMutex, ToHex, ZeroingString};
 use grin_wallet_api::{Foreign, Owner};
-use grin_wallet_config::{WalletConfig, WALLET_CONFIG_FILE_NAME};
-use grin_wallet_controller::command::{self, CancelArgs, CheckArgs, RepostArgs};
-use grin_wallet_impls::{DefaultLCProvider, DefaultWalletImpl, HTTPNodeClient};
-use grin_wallet_libwallet::{
-    self,
-    api_impl::types::IssueInvoiceTxArgs,
-    InitTxArgs,
-    OutputCommitMapping,
-    PaymentProof,
-    SlatepackAddress,
-    SlateState,
-    TxLogEntry,
-    TxLogEntryType,
-    WalletInfo,
-    WalletInst,
+use grin_wallet_config::{
+    config::{init_api_secret, API_SECRET_FILE_NAME, OWNER_API_SECRET_FILE_NAME},
+    types::{TorConfig, WalletConfig},
+    WALLET_CONFIG_FILE_NAME,
 };
+use grin_wallet_controller::command::{self, CancelArgs, CheckArgs, RepostArgs};
+use grin_wallet_controller::controller;
+use grin_wallet_impls::tor::{config as tor_config, process as tor_process};
+use grin_wallet_impls::{DefaultLCProvider, DefaultWalletImpl, HTTPNodeClient};
+use grin_wallet_libwallet::address;
+use grin_wallet_libwallet::{
+    self, api_impl::types::IssueInvoiceTxArgs, InitTxArgs, OutputCommitMapping, PaymentProof,
+    SlateState, SlatepackAddress, TxLogEntry, TxLogEntryType, WalletInfo, WalletInst,
+};
+use grin_wallet_util::OnionV3Address;
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use serde_json;
@@ -43,15 +46,14 @@ type WalletBackendInstance = Arc<
     >,
 >;
 
-type OwnerApi = Owner<
-    DefaultLCProvider<'static, HTTPNodeClient, ExtKeychain>,
-    HTTPNodeClient,
-    ExtKeychain,
->;
+type OwnerApi =
+    Owner<DefaultLCProvider<'static, HTTPNodeClient, ExtKeychain>, HTTPNodeClient, ExtKeychain>;
 
 struct WalletRuntime {
     owner: OwnerApi,
     keychain_mask: Option<SecretKey>,
+    config: WalletConfig,
+    tor_config: TorConfig,
     _data_dir: PathBuf,
     _node_url: String,
     active_account: String,
@@ -59,8 +61,7 @@ struct WalletRuntime {
 
 static WALLET_RUNTIME: Lazy<Mutex<Option<WalletRuntime>>> = Lazy::new(|| Mutex::new(None));
 static CHAIN_INIT: Once = Once::new();
-static NODE_URL: Lazy<Mutex<String>> =
-    Lazy::new(|| Mutex::new("https://grincoin.org".to_string()));
+static NODE_URL: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new("https://grincoin.org".to_string()));
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -206,9 +207,47 @@ impl OutputDto {
     }
 }
 
+#[derive(Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct TorStatusDto {
+    running: bool,
+    onion_address: Option<String>,
+    slatepack_address: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OwnerListenerStatusDto {
+    running: bool,
+    listen_addr: String,
+    message: Option<String>,
+}
+
+struct TorRuntime {
+    process: Option<tor_process::TorProcess>,
+    onion: String,
+    slatepack: String,
+}
+
+static TOR_RUNTIME: Lazy<Mutex<Option<TorRuntime>>> = Lazy::new(|| Mutex::new(None));
+
+struct OwnerListenerRuntime {
+    _handle: thread::JoinHandle<()>,
+    listen_addr: String,
+}
+
+static OWNER_LISTENER: Lazy<Mutex<Option<OwnerListenerRuntime>>> = Lazy::new(|| Mutex::new(None));
+
 pub fn reset() {
     if let Ok(mut guard) = WALLET_RUNTIME.lock() {
         *guard = None;
+    }
+    if let Ok(mut t) = TOR_RUNTIME.lock() {
+        if let Some(mut rt) = t.take() {
+            if let Some(child) = rt.process.as_mut().and_then(|p| p.process.as_mut()) {
+                let _ = child.kill();
+            }
+        }
     }
 }
 
@@ -271,7 +310,9 @@ pub fn create_wallet(data_dir: &str, passphrase: &str, mnemonic_length: usize) -
     wallet_config.data_file_dir = resolved.to_string_lossy().to_string();
 
     {
-        let lc = wallet.lc_provider().map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
+        let lc = wallet
+            .lc_provider()
+            .map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
         lc.set_top_level_directory(&wallet_config.data_file_dir)
             .map_err(|e| anyhow!("Top-Level-Verzeichnis konnte nicht gesetzt werden: {e}"))?;
         lc.create_config(
@@ -307,7 +348,9 @@ pub fn seed_phrase(data_dir: &str, passphrase: &str) -> Result<String> {
     let resolved = resolve_data_dir(data_dir)?;
     let node_url = current_node_url()?;
     let mut wallet = build_wallet_backend(&resolved, &node_url)?;
-    let lc = wallet.lc_provider().map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
+    let lc = wallet
+        .lc_provider()
+        .map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
     let dir_string = resolved.to_string_lossy().to_string();
     lc.set_top_level_directory(&dir_string)
         .map_err(|e| anyhow!("Top-Level-Verzeichnis konnte nicht gesetzt werden: {e}"))?;
@@ -317,11 +360,7 @@ pub fn seed_phrase(data_dir: &str, passphrase: &str) -> Result<String> {
     Ok(mnemonic.to_string())
 }
 
-pub fn restore_wallet_from_seed(
-    data_dir: &str,
-    passphrase: &str,
-    mnemonic: &str,
-) -> Result<()> {
+pub fn restore_wallet_from_seed(data_dir: &str, passphrase: &str, mnemonic: &str) -> Result<()> {
     ensure_chain_type();
     let resolved = resolve_data_dir(data_dir)?;
     let node_url = current_node_url()?;
@@ -331,13 +370,12 @@ pub fn restore_wallet_from_seed(
     wallet_config.check_node_api_http_addr = node_url.clone();
     wallet_config.data_file_dir = resolved.to_string_lossy().to_string();
 
-    std::fs::create_dir_all(&wallet_config.data_file_dir)
-        .with_context(|| {
-            format!(
-                "Konnte Wallet-Verzeichnis nicht anlegen: {}",
-                wallet_config.data_file_dir
-            )
-        })?;
+    std::fs::create_dir_all(&wallet_config.data_file_dir).with_context(|| {
+        format!(
+            "Konnte Wallet-Verzeichnis nicht anlegen: {}",
+            wallet_config.data_file_dir
+        )
+    })?;
 
     {
         let lc = wallet
@@ -361,11 +399,8 @@ pub fn restore_wallet_from_seed(
         let phrase = ZeroingString::from(phrase_clean.clone());
         lc.validate_mnemonic(phrase.clone())
             .map_err(|e| anyhow!("Seedphrase ungueltig: {e}"))?;
-        lc.recover_from_mnemonic(
-            phrase,
-            ZeroingString::from(passphrase.to_string()),
-        )
-        .map_err(|e| anyhow!("Wallet konnte nicht aus Seed wiederhergestellt werden: {e}"))?;
+        lc.recover_from_mnemonic(phrase, ZeroingString::from(passphrase.to_string()))
+            .map_err(|e| anyhow!("Wallet konnte nicht aus Seed wiederhergestellt werden: {e}"))?;
     }
 
     let runtime = build_runtime(&resolved, passphrase, &node_url)?;
@@ -429,23 +464,15 @@ pub fn send_slatepack(to: &str, amount: u64) -> Result<String> {
 pub fn receive_slatepack(message: &str) -> Result<String> {
     let msg = message.to_string();
     with_owner(|owner, mask| {
-        let slate =
-            owner.slate_from_slatepack_message(mask, msg.clone(), vec![0])?;
-        let decoded =
-            owner.decode_slatepack_message(mask, msg.clone(), vec![0])?;
-        let foreign = Foreign::new(
-            owner.wallet_inst.clone(),
-            mask.cloned(),
-            None,
-            false,
-        );
+        let slate = owner.slate_from_slatepack_message(mask, msg.clone(), vec![0])?;
+        let decoded = owner.decode_slatepack_message(mask, msg.clone(), vec![0])?;
+        let foreign = Foreign::new(owner.wallet_inst.clone(), mask.cloned(), None, false);
         let received = foreign.receive_tx(&slate, None, None)?;
         let mut recipients = Vec::new();
         if let Some(sender) = decoded.sender {
             recipients.push(sender);
         }
-        let response =
-            owner.create_slatepack_message(mask, &received, Some(0), recipients)?;
+        let response = owner.create_slatepack_message(mask, &received, Some(0), recipients)?;
         Ok(response)
     })
 }
@@ -468,10 +495,8 @@ pub fn issue_invoice(amount: u64) -> Result<String> {
 pub fn process_invoice(message: &str) -> Result<String> {
     let msg = message.to_string();
     with_owner(|owner, mask| {
-        let slate =
-            owner.slate_from_slatepack_message(mask, msg.clone(), vec![0])?;
-        let decoded =
-            owner.decode_slatepack_message(mask, msg.clone(), vec![0])?;
+        let slate = owner.slate_from_slatepack_message(mask, msg.clone(), vec![0])?;
+        let decoded = owner.decode_slatepack_message(mask, msg.clone(), vec![0])?;
         let init_args = InitTxArgs {
             amount: slate.amount,
             selection_strategy_is_use_all: false,
@@ -482,8 +507,7 @@ pub fn process_invoice(message: &str) -> Result<String> {
         if let Some(sender) = decoded.sender {
             recipients.push(sender);
         }
-        let response =
-            owner.create_slatepack_message(mask, &processed, Some(0), recipients)?;
+        let response = owner.create_slatepack_message(mask, &processed, Some(0), recipients)?;
         owner.tx_lock_outputs(mask, &processed)?;
         Ok(response)
     })
@@ -491,37 +515,38 @@ pub fn process_invoice(message: &str) -> Result<String> {
 
 pub fn inspect_slatepack(message: &str) -> Result<String> {
     let msg = message.to_string();
-    with_owner(|owner, mask| -> Result<String, grin_wallet_libwallet::Error> {
-        let slate =
-            owner.slate_from_slatepack_message(mask, msg.clone(), vec![0])?;
-        let slate_id = slate.id.to_string();
-        let code = match slate.state {
-            SlateState::Standard1 => "S1",
-            SlateState::Standard2 => "S2",
-            SlateState::Standard3 => "S3",
-            SlateState::Invoice1 => "I1",
-            SlateState::Invoice2 => "I2",
-            SlateState::Invoice3 => "I3",
-            SlateState::Unknown => "UN",
-        }
-        .to_string();
-        let fee = slate.fee_fields.fee();
-        let info = SlateInspectionDto {
-            code,
-            slate_id,
-            state: format!("{:?}", slate.state),
-            amount: slate.amount,
-            fee,
-            num_participants: slate.participant_data.len() as u16,
-            kernel_excess: slate
-                .tx
-                .as_ref()
-                .and_then(|tx| tx.kernels().first())
-                .map(|k| k.excess().to_hex()),
-        };
-        serde_json::to_string(&info)
-            .map_err(|e| grin_wallet_libwallet::Error::Format(e.to_string()))
-    })
+    with_owner(
+        |owner, mask| -> Result<String, grin_wallet_libwallet::Error> {
+            let slate = owner.slate_from_slatepack_message(mask, msg.clone(), vec![0])?;
+            let slate_id = slate.id.to_string();
+            let code = match slate.state {
+                SlateState::Standard1 => "S1",
+                SlateState::Standard2 => "S2",
+                SlateState::Standard3 => "S3",
+                SlateState::Invoice1 => "I1",
+                SlateState::Invoice2 => "I2",
+                SlateState::Invoice3 => "I3",
+                SlateState::Unknown => "UN",
+            }
+            .to_string();
+            let fee = slate.fee_fields.fee();
+            let info = SlateInspectionDto {
+                code,
+                slate_id,
+                state: format!("{:?}", slate.state),
+                amount: slate.amount,
+                fee,
+                num_participants: slate.participant_data.len() as u16,
+                kernel_excess: slate
+                    .tx
+                    .as_ref()
+                    .and_then(|tx| tx.kernels().first())
+                    .map(|k| k.excess().to_hex()),
+            };
+            serde_json::to_string(&info)
+                .map_err(|e| grin_wallet_libwallet::Error::Format(e.to_string()))
+        },
+    )
 }
 
 pub fn transaction_slatepack(tx_id: u32) -> Result<String> {
@@ -541,14 +566,12 @@ pub fn transaction_slatepack(tx_id: u32) -> Result<String> {
 pub fn finalize_slatepack(message: &str, post: bool, fluff: bool) -> Result<String> {
     let msg = message.to_string();
     with_owner(|owner, mask| {
-        let slate =
-            owner.slate_from_slatepack_message(mask, msg.clone(), vec![0])?;
+        let slate = owner.slate_from_slatepack_message(mask, msg.clone(), vec![0])?;
         let finalized = owner.finalize_tx(mask, &slate)?;
         if post {
             owner.post_tx(mask, &finalized, fluff)?;
         }
-        let result =
-            owner.create_slatepack_message(mask, &finalized, Some(0), vec![])?;
+        let result = owner.create_slatepack_message(mask, &finalized, Some(0), vec![])?;
         Ok(result)
     })
 }
@@ -556,8 +579,7 @@ pub fn finalize_slatepack(message: &str, post: bool, fluff: bool) -> Result<Stri
 pub fn wallet_info() -> Result<String> {
     with_runtime_mut(|runtime| {
         let mask_ref = runtime.keychain_mask.as_ref();
-        let (refreshed, info) =
-            runtime.owner.retrieve_summary_info(mask_ref, true, 10)?;
+        let (refreshed, info) = runtime.owner.retrieve_summary_info(mask_ref, true, 10)?;
         let dto = WalletInfoDto {
             refreshed_from_node: refreshed,
             info,
@@ -575,12 +597,10 @@ pub fn list_transactions(refresh_from_node: bool) -> Result<String> {
             runtime
                 .owner
                 .retrieve_txs(mask_ref, refresh_from_node, None, None, None)?;
-        let (_, mappings) = runtime.owner.retrieve_outputs(
-            mask_ref,
-            true,
-            refresh_from_node,
-            None,
-        )?;
+        let (_, mappings) =
+            runtime
+                .owner
+                .retrieve_outputs(mask_ref, true, refresh_from_node, None)?;
         let mut confirmations_map: HashMap<u32, u64> = HashMap::new();
         for mapping in mappings {
             if let Some(tx_id) = mapping.output.tx_log_entry {
@@ -615,12 +635,10 @@ pub fn list_outputs(include_spent: bool, refresh_from_node: bool) -> Result<Stri
     with_runtime_mut(|runtime| {
         let mask_ref = runtime.keychain_mask.as_ref();
         let node_height = runtime.owner.node_height(mask_ref)?.height;
-        let (_, mappings) = runtime.owner.retrieve_outputs(
-            mask_ref,
-            include_spent,
-            refresh_from_node,
-            None,
-        )?;
+        let (_, mappings) =
+            runtime
+                .owner
+                .retrieve_outputs(mask_ref, include_spent, refresh_from_node, None)?;
         let outputs: Vec<OutputDto> = mappings
             .into_iter()
             .map(|mapping| OutputDto::from_mapping(mapping, node_height))
@@ -698,8 +716,7 @@ pub fn create_account(label: &str) -> Result<String> {
     }
     with_runtime_mut(|runtime| {
         let mask_ref = runtime.keychain_mask.as_ref();
-        let identifier =
-            runtime.owner.create_account_path(mask_ref, cleaned)?;
+        let identifier = runtime.owner.create_account_path(mask_ref, cleaned)?;
         let dto = AccountDto {
             label: cleaned.to_string(),
             path: identifier.to_bip_32_string(),
@@ -716,9 +733,7 @@ pub fn set_active_account(label: &str) -> Result<String> {
     }
     with_runtime_mut(|runtime| {
         let mask_ref = runtime.keychain_mask.as_ref();
-        runtime
-            .owner
-            .set_active_account(mask_ref, cleaned)?;
+        runtime.owner.set_active_account(mask_ref, cleaned)?;
         runtime.active_account = cleaned.to_string();
         let accounts = runtime.owner.accounts(mask_ref)?;
         let path = accounts
@@ -742,12 +757,9 @@ pub fn active_account() -> Result<String> {
 pub fn payment_proof(tx_id: u32) -> Result<String> {
     with_runtime_mut(|runtime| {
         let mask_ref = runtime.keychain_mask.as_ref();
-        let proof = runtime.owner.retrieve_payment_proof(
-            mask_ref,
-            true,
-            Some(tx_id),
-            None,
-        )?;
+        let proof = runtime
+            .owner
+            .retrieve_payment_proof(mask_ref, true, Some(tx_id), None)?;
         let dto = PaymentProofDto { tx_id, proof };
         to_json(&dto)
     })
@@ -758,8 +770,7 @@ pub fn verify_payment_proof(serialized: &str) -> Result<String> {
         .map_err(|e| anyhow!("Payment Proof konnte nicht gelesen werden: {e}"))?;
     with_runtime_mut(|runtime| {
         let mask_ref = runtime.keychain_mask.as_ref();
-        let (is_sender, is_recipient) =
-            runtime.owner.verify_payment_proof(mask_ref, &proof)?;
+        let (is_sender, is_recipient) = runtime.owner.verify_payment_proof(mask_ref, &proof)?;
         let dto = PaymentProofVerificationDto {
             is_sender,
             is_recipient,
@@ -785,9 +796,22 @@ where
     let mut guard = WALLET_RUNTIME
         .lock()
         .map_err(|_| anyhow!("Wallet-Lock konnte nicht bezogen werden"))?;
-    let runtime = guard
-        .as_mut()
-        .ok_or_else(|| anyhow!("Wallet ist noch nicht initialisiert. Bitte wallet_init_or_open zuerst aufrufen."))?;
+    let runtime = guard.as_mut().ok_or_else(|| {
+        anyhow!("Wallet ist noch nicht initialisiert. Bitte wallet_init_or_open zuerst aufrufen.")
+    })?;
+    op(runtime)
+}
+
+fn with_runtime<R, F>(op: F) -> Result<R>
+where
+    F: FnOnce(&WalletRuntime) -> Result<R>,
+{
+    let guard = WALLET_RUNTIME
+        .lock()
+        .map_err(|_| anyhow!("Wallet-Lock konnte nicht bezogen werden"))?;
+    let runtime = guard.as_ref().ok_or_else(|| {
+        anyhow!("Wallet ist noch nicht initialisiert. Bitte wallet_init_or_open zuerst aufrufen.")
+    })?;
     op(runtime)
 }
 
@@ -801,8 +825,7 @@ fn tx_direction(tx_type: &TxLogEntryType) -> &'static str {
 
 fn tx_status(entry: &TxLogEntry) -> &'static str {
     match entry.tx_type {
-        TxLogEntryType::TxReceivedCancelled
-        | TxLogEntryType::TxSentCancelled => "cancelled",
+        TxLogEntryType::TxReceivedCancelled | TxLogEntryType::TxSentCancelled => "cancelled",
         TxLogEntryType::TxReverted => "reverted",
         _ => {
             if entry.confirmed {
@@ -842,15 +865,34 @@ fn build_runtime(data_dir: &Path, passphrase: &str, node_url: &str) -> Result<Wa
     wallet_config.chain_type = Some(ChainTypes::Mainnet);
     wallet_config.check_node_api_http_addr = node_url.to_owned();
     wallet_config.data_file_dir = data_dir.to_string_lossy().to_string();
-    wallet_config.api_secret_path = None;
-    wallet_config.node_api_secret_path = None;
+    wallet_config.api_secret_path = Some(
+        data_dir
+            .join(OWNER_API_SECRET_FILE_NAME)
+            .to_string_lossy()
+            .to_string(),
+    );
+    wallet_config.node_api_secret_path = Some(
+        data_dir
+            .join(API_SECRET_FILE_NAME)
+            .to_string_lossy()
+            .to_string(),
+    );
     wallet_config.owner_api_include_foreign = Some(false);
+    wallet_config.data_file_dir = data_dir.to_string_lossy().to_string();
+    let mut tor_config = TorConfig::default();
+    tor_config.send_config_dir = data_dir.to_string_lossy().to_string();
 
-    std::fs::create_dir_all(&wallet_config.data_file_dir)
-        .with_context(|| format!("Konnte Wallet-Verzeichnis nicht anlegen: {}", wallet_config.data_file_dir))?;
+    std::fs::create_dir_all(&wallet_config.data_file_dir).with_context(|| {
+        format!(
+            "Konnte Wallet-Verzeichnis nicht anlegen: {}",
+            wallet_config.data_file_dir
+        )
+    })?;
 
     {
-        let lc = wallet.lc_provider().map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
+        let lc = wallet
+            .lc_provider()
+            .map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
         lc.set_top_level_directory(&wallet_config.data_file_dir)
             .map_err(|e| anyhow!("Top-Level-Verzeichnis konnte nicht gesetzt werden: {e}"))?;
     }
@@ -860,8 +902,11 @@ fn build_runtime(data_dir: &Path, passphrase: &str, node_url: &str) -> Result<Wa
 
     let wallet_exists = {
         let mut lock = wallet_arc.lock();
-        let lc = lock.lc_provider().map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
-        lc.wallet_exists(None).map_err(|e| anyhow!("Wallet-Existenz konnte nicht geprueft werden: {e}"))?
+        let lc = lock
+            .lc_provider()
+            .map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
+        lc.wallet_exists(None)
+            .map_err(|e| anyhow!("Wallet-Existenz konnte nicht geprueft werden: {e}"))?
     };
 
     let password = ZeroingString::from(passphrase);
@@ -888,24 +933,43 @@ fn build_runtime(data_dir: &Path, passphrase: &str, node_url: &str) -> Result<Wa
 
     let keychain_mask = {
         let mut lock = wallet_arc.lock();
-        let lc = lock.lc_provider().map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
+        let lc = lock
+            .lc_provider()
+            .map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
         let mask = lc
             .open_wallet(None, password, false, false)
             .map_err(|e| anyhow!("Wallet konnte nicht geoefnet werden: {e}"))?;
-        let wallet_inst = lc.wallet_inst().map_err(|e| anyhow!("Wallet-Instanz konnte nicht geladen werden: {e}"))?;
+        let wallet_inst = lc
+            .wallet_inst()
+            .map_err(|e| anyhow!("Wallet-Instanz konnte nicht geladen werden: {e}"))?;
         wallet_inst
             .set_parent_key_id_by_name(&global_args.account)
             .map_err(|e| anyhow!("Account 'default' konnte nicht gesetzt werden: {e}"))?;
         mask
     };
 
-    Ok(WalletRuntime {
+    let runtime = WalletRuntime {
         owner: owner_api,
         keychain_mask,
+        config: wallet_config.clone(),
+        tor_config,
         _data_dir: data_dir.to_path_buf(),
         _node_url: node_url.to_owned(),
         active_account: global_args.account,
-    })
+    };
+
+    let listen_addr = runtime.config.api_listen_addr();
+    if let Err(err) = spawn_foreign_listener(
+        runtime.owner.wallet_inst.clone(),
+        runtime.keychain_mask.clone(),
+        listen_addr,
+    ) {
+        log_listener_event(&format!(
+            "Foreign listener konnte nicht gestartet werden: {err}"
+        ));
+    }
+
+    Ok(runtime)
 }
 
 fn build_wallet_backend(
@@ -934,4 +998,264 @@ fn ensure_chain_type() {
         global::set_local_chain_type(ChainTypes::Mainnet);
         global::init_global_accept_fee_base(WalletConfig::default_accept_fee_base());
     });
+}
+
+fn log_listener_event(event: &str) {
+    let log_path = Path::new("wallet_data").join("listener.log");
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(log_path) {
+        let _ = writeln!(file, "[{}] {}", Utc::now(), event);
+    }
+}
+
+fn spawn_foreign_listener(
+    wallet: WalletBackendInstance,
+    mask: Option<SecretKey>,
+    listen_addr: String,
+) -> Result<()> {
+    log_listener_event(&format!("Spawning listener for {}", listen_addr));
+    let wallet_clone = wallet.clone();
+    let mask_guard = Arc::new(GrinMutex::new(mask));
+    thread::Builder::new()
+        .name("foreign-listener".to_string())
+        .spawn(move || {
+            log_listener_event("Listener thread started");
+            if let Err(err) = controller::foreign_listener(
+                wallet_clone,
+                mask_guard,
+                listen_addr.as_str(),
+                None,
+                false,
+                false,
+                None,
+            ) {
+                log_listener_event(&format!("Foreign listener failed: {err}"));
+            } else {
+                log_listener_event("Foreign listener stopped");
+            }
+        })?;
+    Ok(())
+}
+
+fn derive_onion_and_slatepack() -> Result<(grin_util::secp::key::SecretKey, OnionV3Address, String)>
+{
+    // Access current wallet instance via Owner API
+    let runtime_guard = WALLET_RUNTIME
+        .lock()
+        .map_err(|_| anyhow!("Wallet ist nicht initialisiert"))?;
+    let runtime = runtime_guard
+        .as_ref()
+        .ok_or_else(|| anyhow!("Wallet ist nicht initialisiert"))?;
+
+    let mut w_lock = runtime.owner.wallet_inst.lock();
+    let lc = w_lock
+        .lc_provider()
+        .map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
+    let w_inst = lc
+        .wallet_inst()
+        .map_err(|e| anyhow!("Wallet-Instanz konnte nicht geladen werden: {e}"))?;
+    let k = w_inst
+        .keychain(runtime.keychain_mask.as_ref())
+        .map_err(|e| anyhow!("Keychain konnte nicht geladen werden: {e}"))?;
+    let parent_key_id = w_inst.parent_key_id();
+    let sec_key = address::address_from_derivation_path(&k, &parent_key_id, 0)
+        .map_err(|e| anyhow!("Address key konnte nicht abgeleitet werden: {e}"))?;
+    let onion = OnionV3Address::from_private(&sec_key.0)
+        .map_err(|e| anyhow!("Onion v3 konnte nicht erzeugt werden: {e}"))?;
+    let sp = grin_wallet_libwallet::SlatepackAddress::try_from(onion.clone())
+        .map_err(|e| anyhow!("Slatepack-Adresse konnte nicht erzeugt werden: {e}"))?;
+    let sp_str = String::try_from(&sp)
+        .map_err(|e| anyhow!("Slatepack-Adresse konnte nicht serialisiert werden: {e}"))?;
+    Ok((sec_key, onion, sp_str))
+}
+
+pub fn tor_status() -> Result<String> {
+    // Running?
+    let (running, onion_str, slatepack_str) = {
+        let guard = TOR_RUNTIME
+            .lock()
+            .map_err(|_| anyhow!("Tor-Status konnte nicht gelesen werden"))?;
+        if let Some(rt) = guard.as_ref() {
+            (true, rt.onion.clone(), rt.slatepack.clone())
+        } else {
+            let (_sk, onion, sp) = derive_onion_and_slatepack()?;
+            (false, onion.to_http_str(), sp)
+        }
+    };
+    let dto = TorStatusDto {
+        running,
+        onion_address: Some(onion_str),
+        slatepack_address: Some(slatepack_str),
+    };
+    to_json(&dto)
+}
+
+fn read_owner_secret(path: &Path) -> Result<String> {
+    if !path.exists() {
+        init_api_secret(&path.to_path_buf())
+            .map_err(|e| anyhow!("Owner API Secret konnte nicht erstellt werden: {e}"))?;
+    }
+    let raw = fs::read_to_string(path)
+        .map_err(|e| anyhow!("Owner API Secret konnte nicht gelesen werden: {e}"))?;
+    let secret = raw.trim().to_string();
+    if secret.is_empty() {
+        Err(anyhow!("Owner API Secret ist leer"))
+    } else {
+        Ok(secret)
+    }
+}
+
+pub fn owner_listener_status() -> Result<String> {
+    let (running, listen_addr) = {
+        let guard = OWNER_LISTENER
+            .lock()
+            .map_err(|_| anyhow!("Owner listener Lock fehlgeschlagen"))?;
+        if let Some(rt) = guard.as_ref() {
+            (true, rt.listen_addr.clone())
+        } else {
+            let addr = with_runtime(|runtime| Ok(runtime.config.owner_api_listen_addr()))?;
+            (false, addr)
+        }
+    };
+    let dto = OwnerListenerStatusDto {
+        running,
+        listen_addr,
+        message: None,
+    };
+    to_json(&dto)
+}
+
+pub fn owner_listener_start() -> Result<String> {
+    {
+        let guard = OWNER_LISTENER
+            .lock()
+            .map_err(|_| anyhow!("Owner listener Lock fehlgeschlagen"))?;
+        if guard.is_some() {
+            return owner_listener_status();
+        }
+    }
+    let (wallet_inst, mask, include_foreign, tor_cfg, listen_addr, secret_path) =
+        with_runtime(|runtime| {
+            let path = runtime
+                .config
+                .api_secret_path
+                .as_ref()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| runtime._data_dir.join(OWNER_API_SECRET_FILE_NAME));
+            Ok((
+                runtime.owner.wallet_inst.clone(),
+                runtime.keychain_mask.clone(),
+                runtime.config.owner_api_include_foreign.unwrap_or(false),
+                runtime.tor_config.clone(),
+                runtime.config.owner_api_listen_addr(),
+                path,
+            ))
+        })?;
+    let secret = read_owner_secret(&secret_path)?;
+    log_listener_event(&format!("Starting owner listener on {}", listen_addr));
+
+    let listen_addr_thread = listen_addr.clone();
+    let handle = thread::Builder::new()
+        .name("owner-listener".to_string())
+        .spawn(move || {
+            log_listener_event("Owner listener thread started");
+            let mask_guard = Arc::new(GrinMutex::new(mask));
+            if let Err(err) = controller::owner_listener(
+                wallet_inst,
+                mask_guard,
+                listen_addr_thread.as_str(),
+                Some(secret),
+                None,
+                Some(include_foreign),
+                Some(tor_cfg),
+                false,
+            ) {
+                log_listener_event(&format!("Owner listener failed: {err}"));
+            } else {
+                log_listener_event("Owner listener stopped");
+            }
+        })?;
+
+    let mut guard = OWNER_LISTENER
+        .lock()
+        .map_err(|_| anyhow!("Owner listener Lock fehlgeschlagen"))?;
+    *guard = Some(OwnerListenerRuntime {
+        _handle: handle,
+        listen_addr: listen_addr.clone(),
+    });
+    owner_listener_status()
+}
+
+pub fn tor_start(listen_addr: &str) -> Result<String> {
+    // If already running, just report status
+    {
+        let guard = TOR_RUNTIME
+            .lock()
+            .map_err(|_| anyhow!("Tor-Status konnte nicht gelesen werden"))?;
+        if guard.is_some() {
+            return tor_status();
+        }
+    }
+
+    let (sec_key, onion, slatepack) = derive_onion_and_slatepack()?;
+
+    // Build torrc and start tor process
+    let runtime_guard = WALLET_RUNTIME
+        .lock()
+        .map_err(|_| anyhow!("Wallet ist nicht initialisiert"))?;
+    let runtime = runtime_guard
+        .as_ref()
+        .ok_or_else(|| anyhow!("Wallet ist nicht initialisiert"))?;
+
+    let mut w_lock = runtime.owner.wallet_inst.lock();
+    let lc = w_lock
+        .lc_provider()
+        .map_err(|e| anyhow!("LC-Provider fehlgeschlagen: {e}"))?;
+    let top = lc
+        .get_top_level_directory()
+        .map_err(|e| anyhow!("Top-Level-Verzeichnis konnte nicht gelesen werden: {e}"))?;
+    let tor_dir = format!("{}/tor/listener", top);
+
+    tor_config::output_tor_listener_config(
+        &tor_dir,
+        listen_addr,
+        &[sec_key],
+        Default::default(),
+        Default::default(),
+    )
+    .map_err(|e| anyhow!("Tor-Konfiguration fehlgeschlagen: {:?}", e))?;
+
+    let mut process = tor_process::TorProcess::new();
+    process
+        .torrc_path(&format!("{}/torrc", tor_dir))
+        .working_dir(&tor_dir)
+        .timeout(40)
+        .completion_percent(100)
+        .launch()
+        .map_err(|e| anyhow!("Tor-Prozessstart fehlgeschlagen: {:?}", e))?;
+
+    // Save runtime
+    {
+        let mut guard = TOR_RUNTIME
+            .lock()
+            .map_err(|_| anyhow!("Tor-Status konnte nicht gesetzt werden"))?;
+        *guard = Some(TorRuntime {
+            process: Some(process),
+            onion: onion.to_http_str(),
+            slatepack: slatepack.clone(),
+        });
+    }
+
+    tor_status()
+}
+
+pub fn tor_stop() -> Result<()> {
+    let mut guard = TOR_RUNTIME
+        .lock()
+        .map_err(|_| anyhow!("Tor-Status konnte nicht gesetzt werden"))?;
+    if let Some(mut rt) = guard.take() {
+        if let Some(child) = rt.process.as_mut().and_then(|p| p.process.as_mut()) {
+            let _ = child.kill();
+        }
+    }
+    Ok(())
 }

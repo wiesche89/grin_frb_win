@@ -1,7 +1,6 @@
-use anyhow::{anyhow, Result};
 use crate::wallet;
+use anyhow::{anyhow, Result};
 use flutter_rust_bridge::frb;
-
 
 #[frb]
 pub fn set_node_url(url: String) -> Result<()> {
@@ -19,7 +18,6 @@ pub async fn get_node_tip() -> Result<u64> {
     run_blocking(|| wallet::node_tip()).await
 }
 
-
 #[frb]
 pub async fn wallet_init_or_open(data_dir: String, passphrase: String) -> Result<()> {
     let dir = data_dir.trim().to_string();
@@ -27,7 +25,11 @@ pub async fn wallet_init_or_open(data_dir: String, passphrase: String) -> Result
 }
 
 #[frb]
-pub async fn wallet_create(data_dir: String, passphrase: String, mnemonic_length: usize) -> Result<String> {
+pub async fn wallet_create(
+    data_dir: String,
+    passphrase: String,
+    mnemonic_length: usize,
+) -> Result<String> {
     let dir = data_dir.trim().to_string();
     run_blocking(move || wallet::create_wallet(&dir, &passphrase, mnemonic_length)).await
 }
@@ -91,7 +93,11 @@ pub async fn wallet_inspect_slatepack(message: String) -> Result<String> {
 }
 
 #[frb]
-pub async fn wallet_finalize_slatepack(message: String, post_tx: bool, fluff: bool) -> Result<String> {
+pub async fn wallet_finalize_slatepack(
+    message: String,
+    post_tx: bool,
+    fluff: bool,
+) -> Result<String> {
     run_blocking(move || wallet::finalize_slatepack(&message, post_tx, fluff)).await
 }
 
@@ -121,7 +127,11 @@ pub async fn wallet_repost_tx(tx_id: u32, fluff: bool) -> Result<()> {
 }
 
 #[frb]
-pub async fn wallet_scan(delete_unconfirmed: bool, start_height: Option<u64>, backwards_from_tip: Option<u64>) -> Result<String> {
+pub async fn wallet_scan(
+    delete_unconfirmed: bool,
+    start_height: Option<u64>,
+    backwards_from_tip: Option<u64>,
+) -> Result<String> {
     run_blocking(move || wallet::scan(delete_unconfirmed, start_height, backwards_from_tip)).await
 }
 
@@ -158,6 +168,39 @@ pub async fn wallet_transaction_slatepack(tx_id: u32) -> Result<String> {
 #[frb]
 pub async fn wallet_verify_payment_proof(payload: String) -> Result<String> {
     run_blocking(move || wallet::verify_payment_proof(&payload)).await
+}
+
+// --- Tor service ---
+
+#[frb]
+pub async fn tor_status() -> Result<String> {
+    run_blocking(|| wallet::tor_status()).await
+}
+
+#[frb]
+pub async fn tor_start(listen_addr: String) -> Result<String> {
+    let addr = listen_addr.trim().to_string();
+    let a = if addr.is_empty() {
+        "127.0.0.1:3415".to_string()
+    } else {
+        addr
+    };
+    run_blocking(move || wallet::tor_start(&a)).await
+}
+
+#[frb]
+pub async fn tor_stop() -> Result<()> {
+    run_blocking(|| wallet::tor_stop()).await
+}
+
+#[frb]
+pub async fn owner_listener_status() -> Result<String> {
+    run_blocking(|| wallet::owner_listener_status()).await
+}
+
+#[frb]
+pub async fn owner_listener_start() -> Result<String> {
+    run_blocking(|| wallet::owner_listener_start()).await
 }
 
 async fn run_blocking<F, T>(f: F) -> Result<T>

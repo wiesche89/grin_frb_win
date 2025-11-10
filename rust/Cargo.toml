@@ -23,3 +23,5 @@ grin_wallet_config = { path = "../grin-wallet/config" }
 grin_wallet_controller = { path = "../grin-wallet/controller" }
 grin_wallet_impls = { path = "../grin-wallet/impls" }
 grin_wallet_libwallet = { path = "../grin-wallet/libwallet" }
+grin_wallet_util = { path = "../grin-wallet/util" }
+chrono = { version = "0.4", features = ["serde"] }
