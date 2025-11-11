@@ -39,7 +39,9 @@ grin_frb_win/
    flutter doctor      # check for missing tools
    ```
    - If `flutter doctor` reports “Visual Studio not installed”, install the **Desktop development with C++**
-     workload (Windows 10/11 SDK included).
+     
+   - https://gist.github.com/Chenx221/6f4ed72cd785d80edb0bc50c9921daf7
+   - Please install the "Desktop development with C++" workload, including all of its default components"
 
 2. **Install Rust**
    ```powershell
@@ -49,6 +51,14 @@ grin_frb_win/
    rustup show   # verify stable-x86_64-pc-windows-msvc is active
    ```
    Visual Studio Build Tools from the previous step provide the MSVC linker required by Rust.
+
+2. **Install Codegen**
+
+   Install flutter rust bridge for codegen
+   
+   ```rustup update stable
+      cargo install flutter_rust_bridge_codegen
+   ```
 
 3. **Project dependencies**
    - From the repo root run `flutter pub get`.
@@ -77,7 +87,7 @@ Whenever you modify `rust/src/api.rs` or the data types exposed to Flutter, rege
    [System.IO.File]::WriteAllText("$rootNoUnc\rust\src\frb_generated.rs", "")
 
    # 2) use the extended path prefix for the generator (handles long paths)
-   $root = "\\?\C:\ProjekteGit\github\wiesche89\grin_frb_win"
+   $root = "\\?\C:\ProjekteGit\opensource\wiesche89\grin_frb_win"
    flutter_rust_bridge_codegen generate `
      --rust-root "$root\rust" `
      --rust-input crate::api `
