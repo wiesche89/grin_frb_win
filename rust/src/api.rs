@@ -1,4 +1,4 @@
-use crate::{atomic_swap, wallet};
+use crate::wallet;
 use anyhow::{anyhow, Result};
 use flutter_rust_bridge::frb;
 
@@ -203,85 +203,6 @@ pub async fn owner_listener_start() -> Result<String> {
     run_blocking(|| wallet::owner_listener_start()).await
 }
 
-#[frb]
-pub async fn atomic_swap_init(
-    from_currency: String,
-    to_currency: String,
-    from_amount: u64,
-    to_amount: u64,
-    timeout_minutes: u64,
-) -> Result<String> {
-    run_blocking(move || {
-        atomic_swap::init_swap(
-            &from_currency,
-            &to_currency,
-            from_amount,
-            to_amount,
-            timeout_minutes,
-        )
-    })
-    .await
-}
-
-#[frb]
-pub async fn atomic_swap_accept(swap_id: u64) -> Result<String> {
-    run_blocking(move || atomic_swap::accept_swap(swap_id)).await
-}
-
-#[frb]
-pub async fn atomic_swap_read(swap_id: u64) -> Result<String> {
-    run_blocking(move || atomic_swap::read_swap(swap_id)).await
-}
-
-#[frb]
-pub async fn atomic_swap_list() -> Result<String> {
-    run_blocking(|| atomic_swap::list_swaps()).await
-}
-
-#[frb]
-pub async fn atomic_swap_checksum(swap_id: u64) -> Result<String> {
-    run_blocking(move || atomic_swap::swap_checksum(swap_id)).await
-}
-
-#[frb]
-pub async fn atomic_swap_set_directory(path: String) -> Result<String> {
-    let path_clone = path.clone();
-    run_blocking(move || atomic_swap::set_slate_directory(&path_clone)).await?;
-    Ok(path)
-}
-
-#[frb]
-pub async fn atomic_swap_set_peer(host: String, port: String) -> Result<String> {
-    let host_clone = host.clone();
-    let port_clone = port.clone();
-    run_blocking(move || atomic_swap::set_peer_endpoint(&host_clone, &port_clone)).await?;
-    Ok(format!("{host}:{port}"))
-}
-
-#[frb]
-pub async fn atomic_swap_lock(swap_id: u64) -> Result<String> {
-    run_blocking(move || atomic_swap::lock_swap(swap_id)).await
-}
-
-#[frb]
-pub async fn atomic_swap_execute(swap_id: u64) -> Result<String> {
-    run_blocking(move || atomic_swap::execute_swap(swap_id)).await
-}
-
-#[frb]
-pub async fn atomic_swap_cancel(swap_id: u64) -> Result<String> {
-    run_blocking(move || atomic_swap::cancel_swap(swap_id)).await
-}
-
-#[frb]
-pub async fn atomic_swap_delete(swap_id: u64) -> Result<String> {
-    run_blocking(move || atomic_swap::delete_swap(swap_id)).await
-}
-
-#[frb]
-pub async fn atomic_swap_import(swap_id: u64, payload: String) -> Result<String> {
-    run_blocking(move || atomic_swap::import_public_slate(swap_id, &payload)).await
-}
 
 async fn run_blocking<F, T>(f: F) -> Result<T>
 where

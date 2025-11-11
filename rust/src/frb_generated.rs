@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1353694092;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 96907516;
 
 // Section: executor
 
@@ -45,452 +45,6 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
-fn wire__crate__api__atomic_swap_accept_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_accept",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_swap_id = <u64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::atomic_swap_accept(api_swap_id).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_cancel_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_cancel",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_swap_id = <u64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::atomic_swap_cancel(api_swap_id).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_checksum_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_checksum",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_swap_id = <u64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::atomic_swap_checksum(api_swap_id).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_delete_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_delete",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_swap_id = <u64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::atomic_swap_delete(api_swap_id).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_execute_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_execute",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_swap_id = <u64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::atomic_swap_execute(api_swap_id).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_import_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_import",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_swap_id = <u64>::sse_decode(&mut deserializer);
-            let api_payload = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok =
-                            crate::api::atomic_swap_import(api_swap_id, api_payload).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_init_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_init",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_from_currency = <String>::sse_decode(&mut deserializer);
-            let api_to_currency = <String>::sse_decode(&mut deserializer);
-            let api_from_amount = <u64>::sse_decode(&mut deserializer);
-            let api_to_amount = <u64>::sse_decode(&mut deserializer);
-            let api_timeout_minutes = <u64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::atomic_swap_init(
-                            api_from_currency,
-                            api_to_currency,
-                            api_from_amount,
-                            api_to_amount,
-                            api_timeout_minutes,
-                        )
-                        .await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_list_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_list",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::atomic_swap_list().await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_lock_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_lock",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_swap_id = <u64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::atomic_swap_lock(api_swap_id).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_read_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_read",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_swap_id = <u64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::atomic_swap_read(api_swap_id).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_set_directory_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_set_directory",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_path = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::atomic_swap_set_directory(api_path).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__atomic_swap_set_peer_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atomic_swap_set_peer",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_host = <String>::sse_decode(&mut deserializer);
-            let api_port = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok =
-                            crate::api::atomic_swap_set_peer(api_host, api_port).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
 fn wire__crate__api__get_node_tip_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1841,54 +1395,42 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => wire__crate__api__atomic_swap_accept_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__atomic_swap_cancel_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__atomic_swap_checksum_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__atomic_swap_delete_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__atomic_swap_execute_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__atomic_swap_import_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__atomic_swap_init_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__atomic_swap_list_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__atomic_swap_lock_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__atomic_swap_read_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__atomic_swap_set_directory_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__atomic_swap_set_peer_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__get_node_tip_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__get_node_url_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__owner_listener_start_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__owner_listener_status_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__set_node_url_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__tor_start_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__tor_status_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__tor_stop_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__wallet_active_account_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__wallet_cancel_tx_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__wallet_create_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__wallet_create_account_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__wallet_finalize_slatepack_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__wallet_get_address_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__wallet_get_balance_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__wallet_info_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__wallet_init_or_open_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__wallet_inspect_slatepack_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__wallet_issue_invoice_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__wallet_list_accounts_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__wallet_list_outputs_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__wallet_list_transactions_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__wallet_payment_proof_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__wallet_process_invoice_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__wallet_receive_slatepack_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__wallet_repost_tx_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__wallet_restore_from_seed_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__wallet_scan_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__wallet_seed_phrase_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__wallet_send_slatepack_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__wallet_set_active_account_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__wallet_sync_impl(port, ptr, rust_vec_len, data_len),
-        45 => {
+        1 => wire__crate__api__get_node_tip_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__get_node_url_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__owner_listener_start_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__owner_listener_status_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__set_node_url_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__tor_start_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__tor_status_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__tor_stop_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__wallet_active_account_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__wallet_cancel_tx_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__wallet_create_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__wallet_create_account_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__wallet_finalize_slatepack_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__wallet_get_address_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__wallet_get_balance_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__wallet_info_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__wallet_init_or_open_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__wallet_inspect_slatepack_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__wallet_issue_invoice_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__wallet_list_accounts_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__wallet_list_outputs_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__wallet_list_transactions_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__wallet_payment_proof_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__wallet_process_invoice_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__wallet_receive_slatepack_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__wallet_repost_tx_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__wallet_restore_from_seed_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__wallet_scan_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__wallet_seed_phrase_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__wallet_send_slatepack_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__wallet_set_active_account_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__wallet_sync_impl(port, ptr, rust_vec_len, data_len),
+        33 => {
             wire__crate__api__wallet_transaction_slatepack_impl(port, ptr, rust_vec_len, data_len)
         }
-        46 => wire__crate__api__wallet_verify_payment_proof_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__wallet_verify_payment_proof_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

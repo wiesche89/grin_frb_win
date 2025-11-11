@@ -9,14 +9,13 @@ import 'package:provider/provider.dart';
 import '../localization/loc.dart';
 import '../localization/locale_store.dart';
 import '../rust/frb_generated.dart/api.dart' as bridge;
-import '../ui/swap_wizard.dart';
 import '../wallet/models.dart';
 import '../wallet/wallet_store.dart';
 
 const _publicNode = 'https://grincoin.org';
 const _localNode = 'http://localhost:3413';
 
-enum WalletPanel { overview, transactions, outputs, slatepacks, swaps, accounts, tor, api }
+enum WalletPanel { overview, transactions, outputs, slatepacks, accounts, tor, api }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -720,7 +719,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         _railDest(context.tr('Transactions', 'Transaktionen'), Icons.swap_horiz),
                         _railDest(context.tr('Outputs', 'Outputs'), Icons.storage),
                         _railDest(context.tr('Slatepacks', 'Slatepacks'), Icons.all_inbox),
-                        _railDest(context.tr('Swaps', 'Swaps'), Icons.link),
                         _railDest(context.tr('Accounts', 'Accounts'), Icons.account_tree),
                         _railDest(context.tr('TOR', 'TOR'), Icons.security),
                         _railDest(context.tr('API', 'API'), Icons.api),
@@ -898,8 +896,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return _outputsPanel(store);
       case WalletPanel.slatepacks:
         return _slatepackPanel();
-      case WalletPanel.swaps:
-        return const SwapWizard();
       case WalletPanel.accounts:
         return _accountsPanel(store);
       case WalletPanel.tor:
