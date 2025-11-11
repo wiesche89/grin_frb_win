@@ -31,6 +31,15 @@ grin_frb_win/
 
 ## 2. Installation (Flutter & Rust)
 
+0. **Checkout Code**
+   ```
+   cd /c/temp
+   git clone --recursive https://github.com/wiesche89/grin_frb_win.git
+   cd grin_frb_win
+   git submodule update --init --recursive
+   ```
+
+
 1. **Install Flutter**
    ```powershell
    # Grab the SDK from https://docs.flutter.dev/get-started/install
@@ -52,15 +61,15 @@ grin_frb_win/
    ```
    Visual Studio Build Tools from the previous step provide the MSVC linker required by Rust.
 
-2. **Install Codegen**
+3. **Install Codegen**
 
    Install flutter rust bridge for codegen
-   
+
    ```rustup update stable
       cargo install flutter_rust_bridge_codegen
    ```
 
-3. **Project dependencies**
+4. **Project dependencies**
    - From the repo root run `flutter pub get`.
    - Build the Rust crate once to fetch cargo dependencies:
      ```powershell
