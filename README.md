@@ -32,25 +32,23 @@ grin_frb_win/
 ## 2. Installation (Flutter & Rust)
 
 0. **Checkout Code**
-   ```
+   ```powershell
    cd /c/temp
    git clone --recursive https://github.com/wiesche89/grin_frb_win.git
    cd grin_frb_win
    git submodule update --init --recursive
    ```
 
-
 1. **Install Flutter**
    ```powershell
    # Grab the SDK from https://docs.flutter.dev/get-started/install
-   setx PATH "$env:PATH;<flutter-sdk>\bin"
+   setx PATH "$env:PATH;<flutter-sdk>in"
    flutter config --enable-windows-desktop
    flutter doctor      # check for missing tools
    ```
    - If `flutter doctor` reports “Visual Studio not installed”, install the **Desktop development with C++**
-     
    - https://gist.github.com/Chenx221/6f4ed72cd785d80edb0bc50c9921daf7
-   - Please install the "Desktop development with C++" workload, including all of its default components"
+   - Please install the "Desktop development with C++" workload, including all of its default components.
 
 2. **Install Rust**
    ```powershell
@@ -62,11 +60,9 @@ grin_frb_win/
    Visual Studio Build Tools from the previous step provide the MSVC linker required by Rust.
 
 3. **Install Codegen**
-
-   Install flutter rust bridge for codegen
-
-   ```rustup update stable
-      cargo install flutter_rust_bridge_codegen
+   ```powershell
+   rustup update stable
+   cargo install flutter_rust_bridge_codegen
    ```
 
 4. **Project dependencies**
@@ -88,6 +84,7 @@ Whenever you modify `rust/src/api.rs` or the data types exposed to Flutter, rege
    cargo install flutter_rust_bridge_codegen
    cargo install cbindgen
    ```
+
 2. Regenerate the glue code (example for PowerShell with long-path-safe UNC syntax):
    ```powershell
    # 1) avoid UNC in creation step so the file exists
@@ -104,6 +101,7 @@ Whenever you modify `rust/src/api.rs` or the data types exposed to Flutter, rege
      --rust-output "$root\rust\src\frb_generated.rs" `
      --watch
    ```
+
 3. Rebuild:
    ```powershell
    cd rust && cargo build
@@ -133,17 +131,87 @@ For packaging/distribution you can sign the generated `.msi` or `.exe` using the
 
 ---
 
-Happy hacking! Contributions to both the Flutter UI and the Rust bridge are welcome. Always keep the
-`grin-wallet` subtree up to date to benefit from upstream fixes and security patches.
+## 5. Flutter Test Suite
+
+This project includes a **widget and integration test suite** designed to verify both UI rendering and basic state flows without requiring the Rust bridge to load.
+
+### Overview
+All tests live under the `test/` directory. The suite is structured to separate pure UI validation from Rust-dependent logic:
+```
+test/
+├─ app_bootstrap_smoke_test.dart       # Basic startup test, verifies MyApp builds
+├─ error_app_public_test.dart          # Verifies error UI when Rust DLL is missing
+├─ home_screen_with_fakes_test.dart    # Renders HomeScreen with fake stores
+├─ home_screen_locale_test.dart        # Ensures translations appear correctly
+└─ test_support/fakes.dart             # FakeWalletService + FakeWalletStore for testing
+```
+
+### Running Tests
+Execute all tests from the project root:
+```powershell
+flutter test
+```
+
+To run a single test file:
+```powershell
+flutter test test/home_screen_locale_test.dart
+```
+
+All tests are executed using **fake service layers** (`FakeWalletService`, `FakeWalletStore`) that mimic the Grin wallet APIs.  
+This allows Flutter tests to run **without a compiled Rust DLL** and **without network access**.
+
+### Adding New Tests
+When adding new screens or UI components:
+1. Place test files under `/test/`.
+2. Use the existing fakes or extend them to mock the required data.
+3. For widget tests, always wrap your widget in a `MaterialApp` or `MultiProvider` context:
+   ```dart
+   await tester.pumpWidget(
+     MultiProvider(
+       providers: [
+         ChangeNotifierProvider(create: (_) => FakeWalletStore()),
+       ],
+       child: const MaterialApp(home: HomeScreen()),
+     ),
+   );
+   ```
+4. Use `await tester.pumpAndSettle()` to ensure animations and async events complete.
+
+### Example
+```dart
+testWidgets('renders locked wallet state in German', (tester) async {
+  final localeStore = LocaleStore()..setLocale(const Locale('de'));
+
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => FakeWalletStore()),
+        ChangeNotifierProvider.value(value: localeStore),
+      ],
+      child: const MaterialApp(home: HomeScreen()),
+    ),
+  );
+
+  await tester.pumpAndSettle();
+
+  expect(find.text('Bitte entsperre zum Starten'), findsWidgets);
+  expect(find.text('Entsperren'), findsWidgets);
+});
+```
+
+### Notes
+- The test harness sets a large viewport (`1400×900`) for consistent layout across environments.
+- Rust bridge calls are intercepted and replaced with no-op fakes.
+- New contributors should run `flutter test` before submitting a PR to ensure UI stability.
 
 ---
 
-## 5. Feature Overview & Usage
+## 6. Feature Overview & Usage
 
 ### Unlock Flow
 - **Unlock existing wallet** – Point `Wallet directory` to an existing folder and enter the password (leave empty if none).  
 - **Create & unlock** – Choose a new directory. You’ll be prompted to set a password (optional). The wallet is created and opened immediately.  
-- **Restore from seed phrase** – Opens a dialog to paste the 24‑word phrase and set a new password.  
+- **Restore from seed phrase** – Opens a dialog to paste the 24-word phrase and set a new password.  
 - **Logout** – Toolbar button that locks the wallet, stops auto-refresh, and returns to the unlock dialog.
 
 > Passwords are optional for grin wallets; the UI reflects this by allowing empty inputs, but strongly recommends setting one for protection.
@@ -165,4 +233,6 @@ Happy hacking! Contributions to both the Flutter UI and the Rust bridge are welc
 - Creating/restoring a wallet never overwrites existing data silently. Use distinct directories for different wallets.  
 - For seed and password dialogs, empty inputs are accepted when operating on an unprotected wallet, matching grin’s behavior.
 
-With these pieces the Flutter shell exposes almost all `grin-wallet` functionality in a desktop-friendly way.
+---
+
+✅ With these pieces the Flutter shell exposes almost all `grin-wallet` functionality in a desktop-friendly way — now with automated widget tests to keep it stable.
