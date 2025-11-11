@@ -1,7 +1,3 @@
-[submodule "rust/mw_atomic_swap"]
-	path = rust/mw_atomic_swap
-	url = ..\\mw-btc-swap
-
 [submodule "grin-wallet"]
 	path = grin-wallet
 	url = https://github.com/mimblewimble/grin-wallet.git
