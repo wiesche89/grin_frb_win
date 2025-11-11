@@ -42,7 +42,7 @@ grin_frb_win/
 1. **Install Flutter**
    ```powershell
    # Grab the SDK from https://docs.flutter.dev/get-started/install
-   setx PATH "$env:PATH;<flutter-sdk>in"
+   setx PATH "$env:PATH;<flutter-sdk> in"
    flutter config --enable-windows-desktop
    flutter doctor      # check for missing tools
    ```
@@ -232,7 +232,3 @@ testWidgets('renders locked wallet state in German', (tester) async {
 - All dialogs are translated via `context.trNow` so they work even when triggered from button callbacks.  
 - Creating/restoring a wallet never overwrites existing data silently. Use distinct directories for different wallets.  
 - For seed and password dialogs, empty inputs are accepted when operating on an unprotected wallet, matching grin’s behavior.
-
----
-
-✅ With these pieces the Flutter shell exposes almost all `grin-wallet` functionality in a desktop-friendly way — now with automated widget tests to keep it stable.
